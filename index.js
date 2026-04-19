@@ -6,8 +6,8 @@ const { execSync } = require('child_process');
 const app = express();
 app.use(express.json());
 
-const SECRET = 'token123';
-//const SECRET = process.env.SECRET_TOKEN || 'mi_token_secreto';
+//const SECRET = 'token123';
+const SECRET = process.env.SECRET_TOKEN || 'mi_token_secreto';
 
 // Detecta automáticamente donde está Chromium
 function getChromiumPath() {
