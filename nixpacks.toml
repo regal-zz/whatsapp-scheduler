@@ -1,5 +1,31 @@
 [phases.setup]
-nixPkgs = ["chromium", "nss", "atk", "cups", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXrandr", "xorg.libXcursor", "xorg.libXi", "xorg.libXtst", "pango", "cairo", "alsa-lib"]
+nixPkgs = [
+  "chromium",
+  "glib",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "dbus",
+  "libdrm",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "xorg.libxcb",
+  "mesa",
+  "expat",
+  "xorg.libXcursor",
+  "xorg.libXi",
+  "xorg.libXtst",
+  "pango",
+  "cairo",
+  "alsa-lib",
+  "at-spi2-atk",
+  "at-spi2-core"
+]
 
 [start]
 cmd = "node index.js"
