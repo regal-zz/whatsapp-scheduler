@@ -58,9 +58,30 @@ if (chromiumPath) {
 
 const client = new Client(clientConfig);
 
-client.on('qr', (qr) => {
-  console.log('📱 Escanea este QR con tu WhatsApp:');
-  qrcode.generate(qr, { small: true });
+const QRCode = require('qrcode');
+let qrImageUrl = '';
+
+client.on('qr', async (qr) => {
+  console.log('📱 QR generado, ábrelo en el navegador: /qr');
+  qrImageUrl = await QRCode.toDataURL(qr);
+});
+
+// Página web con el QR
+app.get('/qr', (req, res) => {
+  if (!qrImageUrl) {
+    return res.send('<h2>QR no disponible aún, espera unos segundos y recarga</h2>');
+  }
+  res.send(`
+    <html>
+      <body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111">
+        <div style="text-align:center">
+          <h2 style="color:white">Escanea con WhatsApp</h2>
+          <img src="${qrImageUrl}" style="width:300px;height:300px"/>
+          <p style="color:gray">Recarga la página si el QR expiró</p>
+        </div>
+      </body>
+    </html>
+  `);
 });
 
 client.on('ready', () => {
