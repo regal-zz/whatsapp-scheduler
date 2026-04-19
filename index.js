@@ -5,17 +5,24 @@ const qrcode = require('qrcode-terminal');
 const app = express();
 app.use(express.json());
 
-// Token secreto para proteger tu endpoint
 const SECRET = process.env.SECRET_TOKEN || 'mi_token_secreto';
 
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    executablePath: '/run/current-system/sw/bin/chromium',  // Chrome de Nix
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process'
+    ]
   }
 });
 
-// Al iniciar, muestra el QR en consola
 client.on('qr', (qr) => {
   console.log('Escanea este QR con tu WhatsApp:');
   qrcode.generate(qr, { small: true });
@@ -25,14 +32,9 @@ client.on('ready', () => {
   console.log('✅ WhatsApp conectado y listo');
 });
 
-// Endpoint que Apps Script llamará
 app.post('/send', async (req, res) => {
   const { token, groupId, message } = req.body;
-
-  if (token !== SECRET) {
-    return res.status(401).json({ error: 'Token inválido' });
-  }
-
+  if (token !== SECRET) return res.status(401).json({ error: 'Token inválido' });
   try {
     await client.sendMessage(groupId, message);
     res.json({ success: true });
@@ -41,16 +43,13 @@ app.post('/send', async (req, res) => {
   }
 });
 
-// Endpoint para obtener tus grupos
 app.get('/groups', async (req, res) => {
   const token = req.query.token;
   if (token !== SECRET) return res.status(401).json({ error: 'Token inválido' });
-
   const chats = await client.getChats();
   const groups = chats
     .filter(c => c.isGroup)
     .map(c => ({ id: c.id._serialized, name: c.name }));
-
   res.json(groups);
 });
 
