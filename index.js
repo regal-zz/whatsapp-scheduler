@@ -1,16 +1,45 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
 const qrcode = require('qrcode-terminal');
+const { execSync } = require('child_process');
 
 const app = express();
 app.use(express.json());
 
 const SECRET = process.env.SECRET_TOKEN || 'mi_token_secreto';
 
-const client = new Client({
+// Detecta automáticamente donde está Chromium
+function getChromiumPath() {
+  const posibles = [
+    '/run/current-system/sw/bin/chromium',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/nix/var/nix/profiles/default/bin/chromium',
+  ];
+  for (const ruta of posibles) {
+    try {
+      execSync(`test -f ${ruta}`);
+      console.log(`✅ Chromium encontrado en: ${ruta}`);
+      return ruta;
+    } catch {}
+  }
+  // Si no encuentra ninguna, busca con which
+  try {
+    const ruta = execSync('which chromium || which chromium-browser').toString().trim();
+    console.log(`✅ Chromium encontrado con which: ${ruta}`);
+    return ruta;
+  } catch {}
+
+  console.log('⚠️ Chromium no encontrado, usando ruta por defecto de Puppeteer');
+  return null;
+}
+
+const chromiumPath = getChromiumPath();
+
+const clientConfig = {
   authStrategy: new LocalAuth(),
   puppeteer: {
-    executablePath: '/run/current-system/sw/bin/chromium',  // Chrome de Nix
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -21,10 +50,16 @@ const client = new Client({
       '--single-process'
     ]
   }
-});
+};
+
+if (chromiumPath) {
+  clientConfig.puppeteer.executablePath = chromiumPath;
+}
+
+const client = new Client(clientConfig);
 
 client.on('qr', (qr) => {
-  console.log('Escanea este QR con tu WhatsApp:');
+  console.log('📱 Escanea este QR con tu WhatsApp:');
   qrcode.generate(qr, { small: true });
 });
 
