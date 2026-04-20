@@ -1,46 +1,18 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
-const qrcode = require('qrcode-terminal');
-const { execSync } = require('child_process');
+const QRCode = require('qrcode');
 
 const app = express();
 app.use(express.json());
 
-//const SECRET = 'token123';
-const SECRET = process.env.SECRET_TOKEN || 'mi_token_secreto';
+const SECRET = 'token123';
+let qrImageUrl = '';
+let isReady = false;
 
-// Detecta automáticamente donde está Chromium
-function getChromiumPath() {
-  const posibles = [
-    '/run/current-system/sw/bin/chromium',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    '/nix/var/nix/profiles/default/bin/chromium',
-  ];
-  for (const ruta of posibles) {
-    try {
-      execSync(`test -f ${ruta}`);
-      console.log(`✅ Chromium encontrado en: ${ruta}`);
-      return ruta;
-    } catch {}
-  }
-  // Si no encuentra ninguna, busca con which
-  try {
-    const ruta = execSync('which chromium || which chromium-browser').toString().trim();
-    console.log(`✅ Chromium encontrado con which: ${ruta}`);
-    return ruta;
-  } catch {}
-
-  console.log('⚠️ Chromium no encontrado, usando ruta por defecto de Puppeteer');
-  return null;
-}
-
-const chromiumPath = getChromiumPath();
-
-const clientConfig = {
+const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
+    executablePath: '/usr/bin/chromium',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -51,42 +23,70 @@ const clientConfig = {
       '--single-process'
     ]
   }
-};
-
-if (chromiumPath) {
-  clientConfig.puppeteer.executablePath = chromiumPath;
-}
-
-const client = new Client(clientConfig);
-
-const QRCode = require('qrcode');
-let qrImageUrl = '';
+});
 
 client.on('qr', async (qr) => {
   console.log('📱 QR generado, ábrelo en el navegador: /qr');
   qrImageUrl = await QRCode.toDataURL(qr);
 });
 
-// Página web con el QR
-app.get('/qr', (req, res) => {
-  if (!qrImageUrl) {
-    return res.send('<h2>QR no disponible aún, espera unos segundos y recarga</h2>');
-  }
-  res.send(`
-    <html>
-      <body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111">
-        <div style="text-align:center">
-          <h2 style="color:white">Escanea con WhatsApp</h2>
-          <img src="${qrImageUrl}" style="width:300px;height:300px"/>
-          <p style="color:gray">Recarga la página si el QR expiró</p>
-        </div>
-      </body>
-    </html>
-  `);
-});
-
 client.on('ready', () => {
   console.log('✅ WhatsApp conectado y listo');
+  isReady = true;
+  qrImageUrl = '';
+});
+
+app.get('/qr', (req, res) => {
+  if (isReady) {
+    return res.send(`<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111">
+      <h2 style="color:#25D366">✅ WhatsApp ya está conectado</h2>
+    </body></html>`);
+  }
+  if (!qrImageUrl) {
+    return res.send(`<html><head><meta http-equiv="refresh" content="3"></head>
+      <body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111">
+        <h2 style="color:white">⏳ Generando QR, espera...</h2>
+      </body></html>`);
+  }
+  res.send(`<html>
+    <head><meta http-equiv="refresh" content="30"></head>
+    <body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#111">
+      <div style="text-align:center">
+        <h2 style="color:white;font-family:sans-serif">Escanea con WhatsApp</h2>
+        <img src="${qrImageUrl}" style="width:300px;height:300px;border-radius:12px"/>
+        <p style="color:gray;font-family:sans-serif">La página se recarga sola cada 30 segundos</p>
+      </div>
+    </body></html>`);
+});
+
+app.get('/groups', async (req, res) => {
+  const token = req.query.token;
+  console.log('Token recibido:', token);
+  console.log('Token esperado:', SECRET);
+  if (token !== SECRET) return res.status(401).json({ error: 'Token inválido' });
+  try {
+    const chats = await client.getChats();
+    const groups = chats
+      .filter(c => c.isGroup)
+      .map(c => ({ id: c.id._serialized, name: c.name }));
+    res.json(groups);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/contacts', async (req, res) => {
+  const token = req.query.token;
+  if (token !== SECRET) return res.status(401).json({ error: 'Token inválido' });
+  try {
+    const contacts = await client.getContacts();
+    const lista = contacts
+      .filter(c => c.isMyContact && !c.isGroup)
+      .map(c => ({ id: c.id._serialized, name: c.name || c.pushname || c.number }));
+    res.json(lista);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/send', async (req, res) => {
@@ -100,16 +100,6 @@ app.post('/send', async (req, res) => {
   }
 });
 
-app.get('/groups', async (req, res) => {
-  const token = req.query.token;
-  if (token !== SECRET) return res.status(401).json({ error: 'Token inválido' });
-  const chats = await client.getChats();
-  const groups = chats
-    .filter(c => c.isGroup)
-    .map(c => ({ id: c.id._serialized, name: c.name }));
-  res.json(groups);
-});
-
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
 client.initialize();
