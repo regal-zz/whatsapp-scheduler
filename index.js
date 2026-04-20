@@ -5,7 +5,8 @@ const QRCode = require('qrcode');
 const app = express();
 app.use(express.json());
 
-const SECRET = 'token123';
+//const SECRET = 'token123';
+const SECRET = process.env.SECRET_TOKEN || 'token123';
 let qrImageUrl = '';
 let isReady = false;
 
